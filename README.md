@@ -79,17 +79,22 @@ http://localhost:5173
 
 | Method | Route | Purpose |
 |---|---|---|
-| GET | `/api/destinations` | Get destinations |
-| GET | `/api/hotels` | Get hotels |
+| GET | `/` | Backend status check |
+| GET | `/api/health` | Health & MongoDB Atlas connection status |
+| GET | `/api/destinations` | Get destinations (with fallback) |
+| GET | `/api/hotels` | Get hotels (with fallback) |
 | GET | `/api/trips` | Get saved trips |
 | POST | `/api/trips` | Save a trip |
 | DELETE | `/api/trips/:id` | Delete a trip |
 
 ## Troubleshooting
 
-- If the frontend says preview mode, check that the backend is running on port 5000.
-- If the backend reports a MongoDB connection error, check that MongoDB is running and that `MONGO_URI` in `backend/.env` is correct.
-- Run frontend and backend in two separate VS Code terminals.
+- Check server health and database status at `http://localhost:5000/api/health`.
+- If the frontend says preview mode, check that the backend is running on port 5000 and that MongoDB Atlas is connected.
+- If the backend reports a MongoDB Atlas connection error:
+  1. Verify your database username and password in `backend/.env`.
+  2. In MongoDB Atlas, go to **Network Access** and ensure `0.0.0.0/0` is active.
+- Run frontend and backend in two separate terminals.
 - Do not create `.env` as `.env.txt`. In VS Code, use the exact filename `.env`.
 
 ## Deployment Guide (Render + Vercel + MongoDB Atlas)

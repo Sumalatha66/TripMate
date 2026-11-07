@@ -2,7 +2,14 @@ import express from 'express'
 import mongoose from 'mongoose'
 import cors from 'cors'
 import dotenv from 'dotenv'
+import path from 'path'
+import { fileURLToPath } from 'url'
 
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+
+// Load backend/.env first, then fallback to root .env
+dotenv.config({ path: path.join(__dirname, '.env') })
 dotenv.config()
 
 const app = express()
@@ -64,49 +71,146 @@ const sampleHotels = [
   { name: 'Hill Garden Hotel', destination: 'Ooty', pricePerNight: 1600, rating: 4.1, facilities: ['Wi-Fi', 'Garden'], image: 'https://images.unsplash.com/photo-1445019980597-93fa8acb246c?w=900' }
 ]
 
+const MONGO_URI = process.env.MONGO_URI || ''
+const isAtlas = MONGO_URI.includes('mongodb+srv')
+const hasPlaceholder = MONGO_URI.includes('<username>') || MONGO_URI.includes('<password>')
+
+async function seedInitialData() {
+  try {
+    if (mongoose.connection.readyState !== 1) return
+    const destCount = await Destination.countDocuments()
+    if (destCount === 0) {
+      await Destination.insertMany(sampleDestinations)
+      console.log('Sample destinations seeded into MongoDB.')
+    }
+    const hotelCount = await Hotel.countDocuments()
+    if (hotelCount === 0) {
+      await Hotel.insertMany(sampleHotels)
+      console.log('Sample hotels seeded into MongoDB.')
+    }
+  } catch (error) {
+    console.error('Error seeding initial data:', error.message)
+  }
+}
+
+async function connectToDatabase() {
+  if (!MONGO_URI) {
+    console.warn('\n⚠️  [TripMate] MONGO_URI is missing!')
+    console.warn('👉 To connect to MongoDB Atlas, add your connection string to backend/.env:')
+    console.warn('   MONGO_URI=mongodb+srv://<username>:<password>@cluster0.mongodb.net/tripmate?retryWrites=true&w=majority\n')
+    return
+  }
+
+  if (hasPlaceholder) {
+    console.warn('\n⚠️  [TripMate] MONGO_URI contains placeholder credentials (<username> / <password>).')
+    console.warn('👉 Replace <username> and <password> with your actual MongoDB Atlas database credentials in backend/.env\n')
+    return
+  }
+
+  try {
+    console.log(`⏳ Connecting to ${isAtlas ? 'MongoDB Atlas Cloud' : 'Local MongoDB / Compass'}...`)
+    await mongoose.connect(MONGO_URI, {
+      serverSelectionTimeoutMS: 5000
+    })
+    console.log(`✅ MongoDB connected successfully (${isAtlas ? 'MongoDB Atlas' : 'Local MongoDB'}).`)
+    await seedInitialData()
+  } catch (error) {
+    console.error(`❌ MongoDB connection failed: ${error.message}`)
+    if (isAtlas) {
+      console.warn('👉 MongoDB Atlas Troubleshooting:')
+      console.warn('   1. Check username and password in backend/.env')
+      console.warn('   2. Ensure IP 0.0.0.0/0 is added in MongoDB Atlas -> Network Access')
+    } else {
+      console.warn('👉 For MongoDB Atlas, set MONGO_URI=mongodb+srv://<user>:<password>@<cluster>.mongodb.net/tripmate in backend/.env')
+    }
+  }
+}
+
+mongoose.connection.on('disconnected', () => {
+  console.warn('⚠️  MongoDB connection disconnected.')
+})
+
+mongoose.connection.on('reconnected', () => {
+  console.log('✅ MongoDB reconnected.')
+})
+
 app.get('/', (req, res) => {
   res.send('TripMate backend is running.')
 })
 
+app.get(['/health', '/api/health'], (req, res) => {
+  const dbStates = ['disconnected', 'connected', 'connecting', 'disconnecting']
+  const state = dbStates[mongoose.connection.readyState] || 'unknown'
+  res.json({
+    status: 'ok',
+    database: state,
+    databaseType: isAtlas ? 'MongoDB Atlas' : 'Local / Compass',
+    hasCredentials: !hasPlaceholder && Boolean(MONGO_URI),
+    timestamp: new Date().toISOString()
+  })
+})
+
 app.get('/api/destinations', async (req, res) => {
   try {
-    res.json(await Destination.find().sort({ name: 1 }))
+    if (mongoose.connection.readyState === 1) {
+      const docs = await Destination.find().sort({ name: 1 })
+      if (docs && docs.length > 0) return res.json(docs)
+    }
+    res.json(sampleDestinations.map((item, idx) => ({ ...item, _id: `dest-${idx + 1}` })))
   } catch (error) {
-    res.status(500).json({ message: 'Could not load destinations.' })
+    res.json(sampleDestinations.map((item, idx) => ({ ...item, _id: `dest-${idx + 1}` })))
   }
 })
 
 app.get('/api/hotels', async (req, res) => {
   try {
-    res.json(await Hotel.find().sort({ pricePerNight: 1 }))
+    if (mongoose.connection.readyState === 1) {
+      const docs = await Hotel.find().sort({ pricePerNight: 1 })
+      if (docs && docs.length > 0) return res.json(docs)
+    }
+    res.json(sampleHotels.map((item, idx) => ({ ...item, _id: `hotel-${idx + 1}` })))
   } catch (error) {
-    res.status(500).json({ message: 'Could not load hotels.' })
+    res.json(sampleHotels.map((item, idx) => ({ ...item, _id: `hotel-${idx + 1}` })))
   }
 })
 
 app.get('/api/trips', async (req, res) => {
   try {
-    res.json(await Trip.find().sort({ createdAt: -1 }))
+    if (mongoose.connection.readyState === 1) {
+      const trips = await Trip.find().sort({ createdAt: -1 })
+      return res.json(trips)
+    }
+    res.json([])
   } catch (error) {
-    res.status(500).json({ message: 'Could not load trips.' })
+    res.status(500).json({ message: 'Could not load trips from database.' })
   }
 })
 
 app.post('/api/trips', async (req, res) => {
   try {
-    const { destination, startDate, days, totalBudget } = req.body
+    const { destination, startDate, days } = req.body
     if (!destination || !startDate || !Number.isFinite(Number(days)) || Number(days) < 1) {
-      return res.status(400).json({ message: 'Destination, date and valid trip duration are required.' })
+      return res.status(400).json({ message: 'Destination, date and a valid duration (at least 1 day) are required.' })
     }
+
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({
+        message: 'MongoDB Atlas is not connected. Please verify your connection string and ensure IP 0.0.0.0/0 is allowed in Atlas Network Access.'
+      })
+    }
+
     const trip = await Trip.create(req.body)
     res.status(201).json(trip)
   } catch (error) {
-    res.status(400).json({ message: 'Could not save the trip.' })
+    res.status(400).json({ message: error.message || 'Could not save the trip.' })
   }
 })
 
 app.delete('/api/trips/:id', async (req, res) => {
   try {
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({ message: 'MongoDB is not connected.' })
+    }
     const trip = await Trip.findByIdAndDelete(req.params.id)
     if (!trip) return res.status(404).json({ message: 'Trip not found.' })
     res.json({ message: 'Trip deleted.' })
@@ -115,26 +219,9 @@ app.delete('/api/trips/:id', async (req, res) => {
   }
 })
 
-async function startServer() {
-  try {
-    if (!process.env.MONGO_URI) throw new Error('MONGO_URI is missing. Create backend/.env first.')
-    await mongoose.connect(process.env.MONGO_URI)
-    console.log('MongoDB connected.')
+const port = process.env.PORT || 5000
 
-    if (await Destination.countDocuments() === 0) {
-      await Destination.insertMany(sampleDestinations)
-      console.log('Sample destinations added.')
-    }
-    if (await Hotel.countDocuments() === 0) {
-      await Hotel.insertMany(sampleHotels)
-      console.log('Sample hotels added.')
-    }
-
-    const port = process.env.PORT || 5000
-    app.listen(port, () => console.log(`TripMate backend running at http://localhost:${port}`))
-  } catch (error) {
-    console.error('Backend startup error:', error.message)
-  }
-}
-
-startServer()
+app.listen(port, () => {
+  console.log(`TripMate backend running at http://localhost:${port}`)
+  connectToDatabase()
+})

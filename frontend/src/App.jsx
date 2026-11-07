@@ -51,6 +51,14 @@ function App() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [backendOnline, setBackendOnline] = useState(false)
 
+  const todayDate = useMemo(() => {
+    const d = new Date()
+    const year = d.getFullYear()
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }, [])
+
   async function loadData() {
     try {
       const [dRes, hRes, tRes] = await Promise.all([
@@ -127,24 +135,30 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(tripData)
       })
-      if (!response.ok) throw new Error('Save failed')
-      setNotice('Your travel plan has been saved to MongoDB.')
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.message || 'Save failed')
+      }
+      setNotice('Your travel plan has been saved to MongoDB Atlas.')
       setActivities([])
       await loadData()
       setPage('My Trips')
-    } catch {
-      setNotice('Could not save to MongoDB. Start the backend and check your database connection.')
+    } catch (err) {
+      setNotice(err.message || 'Could not save to MongoDB. Start the backend and check your database connection.')
     }
   }
 
   async function deleteTrip(id) {
     try {
       const response = await fetch(`${API}/trips/${id}`, { method: 'DELETE' })
-      if (!response.ok) throw new Error('Delete failed')
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}))
+        throw new Error(errData.message || 'Delete failed')
+      }
       await loadData()
       setNotice('Travel plan deleted.')
-    } catch {
-      setNotice('Could not delete this trip. Please check the backend.')
+    } catch (err) {
+      setNotice(err.message || 'Could not delete this trip. Please check the backend.')
     }
   }
 
@@ -175,7 +189,7 @@ function App() {
 
       {!backendOnline && (
         <div className="demo-notice">
-          <Sparkles size={15} /> Preview mode: sample destinations are shown. Start the backend and MongoDB to save trips.
+          <Sparkles size={15} /> Preview mode: sample destinations and stays are shown. Connect MongoDB Atlas to save and manage your trips.
         </div>
       )}
       {notice && <div className="notice">{notice}</div>}
@@ -288,7 +302,7 @@ function App() {
               </label>
               <div className="two-fields">
                 <label><CalendarDays size={15} /> Start date
-                  <input type="date" min={new Date().toISOString().slice(0, 10)} value={date} onChange={e => setDate(e.target.value)} />
+                  <input type="date" min={todayDate} value={date} onChange={e => setDate(e.target.value)} />
                 </label>
                 <label>Number of days
                   <input type="number" min="1" max="60" value={days} onChange={e => setDays(e.target.value)} />
