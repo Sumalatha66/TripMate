@@ -6,7 +6,7 @@ import {
   Compass, Plus, Trash2, Menu, X, ArrowRight, Sparkles
 } from 'lucide-react'
 
-const rawApiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
+const rawApiUrl = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:5000/api' : '/api')
 const API = rawApiUrl.endsWith('/api') ? rawApiUrl : `${rawApiUrl.replace(/\/$/, '')}/api`
 
 const fallbackDestinations = [

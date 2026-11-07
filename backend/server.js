@@ -142,9 +142,10 @@ mongoose.connection.on('reconnected', () => {
   console.log('✅ MongoDB reconnected.')
 })
 
-app.get('/', (req, res) => {
-  res.send('TripMate backend is running.')
-})
+const distPath = path.join(__dirname, '../frontend/dist')
+
+// Serve static frontend assets if built
+app.use(express.static(distPath))
 
 app.get(['/health', '/api/health'], (req, res) => {
   const dbStates = ['disconnected', 'connected', 'connecting', 'disconnecting']
@@ -242,6 +243,16 @@ app.delete('/api/trips/:id', async (req, res) => {
   } catch (error) {
     res.status(400).json({ message: 'Invalid trip ID.' })
   }
+})
+
+// Serve React SPA index.html for all non-API web routes
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api')) return next()
+  res.sendFile(path.join(distPath, 'index.html'), (err) => {
+    if (err) {
+      res.status(200).send('TripMate backend is running. Run "npm run build" to build and serve the frontend UI.')
+    }
+  })
 })
 
 const port = process.env.PORT || 5000
