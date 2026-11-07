@@ -91,3 +91,36 @@ http://localhost:5173
 - If the backend reports a MongoDB connection error, check that MongoDB is running and that `MONGO_URI` in `backend/.env` is correct.
 - Run frontend and backend in two separate VS Code terminals.
 - Do not create `.env` as `.env.txt`. In VS Code, use the exact filename `.env`.
+
+## Deployment Guide (Render + Vercel + MongoDB Atlas)
+
+### 1. Database (MongoDB Atlas)
+1. Sign up for free at [MongoDB Atlas](https://www.mongodb.com/atlas).
+2. Create a free **M0 Cluster**.
+3. Under **Database Access**, create a user with a secure password.
+4. Under **Network Access**, add `0.0.0.0/0` to allow connections from cloud hosting providers.
+5. Click **Connect** > **Drivers** to copy your connection string:
+   `mongodb+srv://<username>:<password>@cluster0.mongodb.net/tripmate?retryWrites=true&w=majority`
+
+### 2. Backend Deployment (Render)
+1. Sign up at [Render](https://render.com/) and connect your GitHub account.
+2. Click **New +** > **Web Service**.
+3. Connect your repository `TripMate`.
+4. Configure the service settings:
+   - **Root Directory**: `backend`
+   - **Runtime**: `Node`
+   - **Build Command**: `npm install`
+   - **Start Command**: `npm start`
+5. Under **Environment Variables**, add:
+   - `MONGO_URI`: *your MongoDB Atlas connection string*
+   - `PORT`: `5000`
+6. Click **Deploy Web Service** and copy your backend URL (e.g., `https://tripmate-backend.onrender.com`).
+
+### 3. Frontend Deployment (Vercel)
+1. Sign up at [Vercel](https://vercel.com/) and import your `TripMate` GitHub repository.
+2. Configure project settings:
+   - **Root Directory**: select `frontend`
+   - **Framework Preset**: `Vite`
+3. Under **Environment Variables**, add:
+   - `VITE_API_URL`: *your Render backend URL* (e.g. `https://tripmate-backend.onrender.com/api`)
+4. Click **Deploy**!

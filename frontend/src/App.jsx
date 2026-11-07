@@ -6,7 +6,8 @@ import {
   Compass, Plus, Trash2, Menu, X, ArrowRight, Sparkles
 } from 'lucide-react'
 
-const API = 'http://localhost:5000/api'
+const rawApiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
+const API = rawApiUrl.endsWith('/api') ? rawApiUrl : `${rawApiUrl.replace(/\/$/, '')}/api`
 
 const fallbackDestinations = [
   { _id: 'goa', name: 'Goa', location: 'India', description: 'Sunny beaches, coastal cafés and unforgettable sunsets.', estimatedCost: 8000, image: 'https://images.unsplash.com/photo-1512343879784-a960bf40e7f2?w=900' },
