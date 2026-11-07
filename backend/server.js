@@ -4,6 +4,14 @@ import cors from 'cors'
 import dotenv from 'dotenv'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import dns from 'dns'
+
+// Use reliable public DNS servers to resolve Atlas SRV records on Windows
+try {
+  dns.setServers(['8.8.8.8', '1.1.1.1'])
+} catch {
+  // Fall back to default system resolver
+}
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -203,6 +211,23 @@ app.post('/api/trips', async (req, res) => {
     res.status(201).json(trip)
   } catch (error) {
     res.status(400).json({ message: error.message || 'Could not save the trip.' })
+  }
+})
+
+app.put('/api/trips/:id', async (req, res) => {
+  try {
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({ message: 'MongoDB Atlas is not connected.' })
+    }
+    const { destination, startDate, days } = req.body
+    if (!destination || !startDate || !Number.isFinite(Number(days)) || Number(days) < 1) {
+      return res.status(400).json({ message: 'Destination, date and a valid duration (at least 1 day) are required.' })
+    }
+    const trip = await Trip.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true })
+    if (!trip) return res.status(404).json({ message: 'Trip not found.' })
+    res.json(trip)
+  } catch (error) {
+    res.status(400).json({ message: error.message || 'Could not update the trip.' })
   }
 })
 
